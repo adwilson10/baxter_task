@@ -40,7 +40,7 @@ class IKLookupUtil( object ):
         self.jvals.sort()
         
 
-    def ik_lookup(self, refpose):
+    def ik_lookup(self, refpose, joint_name_order):
         # first let's get the y value:
         yval = refpose.pose.position.y
         # now find closest key:
@@ -56,7 +56,12 @@ class IKLookupUtil( object ):
                     break
             key = k
             qref = self.pose_dat[key]
-        return qref
+
+        cmd = []
+        for jnt_name in joint_name_order:
+            cmd.append(qref[jnt_name])
+
+        return cmd
 
 
     def jacob_lookup(self, refpose):
@@ -66,7 +71,7 @@ class IKLookupUtil( object ):
         jfloat = find_nearest(self.jvals, yval)
         key = str(jfloat)
         try:
-            qref = self.jacob_dat[key]
+            jref = self.jacob_dat[key]
         except KeyError:
             # our conversion to float and back to string must not have produced
             # a valid key, let's now find a close key:
