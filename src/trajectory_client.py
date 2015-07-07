@@ -4,7 +4,6 @@ import baxter_interface
 from baxter_interface import CHECK_VERSION
 
 from trajectory_msgs.msg import JointTrajectoryPoint
-from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import UInt16
 import math
 import numpy as np
@@ -41,63 +40,83 @@ class TrajectoryPublisher(object):
         return [self._limb.joint_angle(joint) for joint in joint_names]
 
 
-    def get_point(self, time):
+    def get_point(self, refpose):
         point = JointTrajectoryPoint()
-        point.time_from_start = rospy.Duration.from_sec(time)
-
-        #using sine function for test
-        refpose = PoseStamped()
-        refpose.pose.position.y = 0.25*math.cos(time)-0.25
         
         # get configs given reference pose:
-        joint_names = self._limb.joint_names()
-        point.positions = self.ikl.ik_lookup(refpose, joint_names)
+        point.positions = self.ikl.ik_lookup(refpose, self.joint_names)
         
         # set velocity from inverse jacobian
         jref = self.ikl.jacob_lookup(refpose)
-        point.velocities = np.dot(jref, np.array([0,-0.25*math.sin(time),0,0,0,0]))
+        point.velocities = np.dot(jref, np.array([0,refpose.velocities[0],0,0,0,0]))
 
         # set acceleration from inverse jacobian
-        point.accelerations = np.dot(jref, np.array([0,-0.25*math.cos(time),0,0,0,0]))
+        point.accelerations = np.dot(jref, np.array([0,refpose.accelerations[0],0,0,0,0]))
 
         return point
 
 
-    def start(self):
+    def sine_func(self, time):
+        refpose = JointTrajectoryPoint()
+        refpose.positions = [0.25*math.cos(time)-0.25]
+        refpose.velocities = [-0.25*math.sin(time)]
+        refpose.accelerations = [-0.25*math.cos(time)]
+        
+        return refpose
+
+
+    def reset(self):
 
         # move right arm to initial config:
         rospy.loginfo("Moving right arm to initial condition")
-        p0 = PoseStamped()
-        p0.pose.position.y = -0.0
+        p0 = JointTrajectoryPoint()
+        p0.positions = [-0.0]
 
-        joint_names = self._limb.joint_names()
-        q0 = self.ikl.ik_lookup(p0, joint_names)
-        cmd = dict(zip(joint_names, q0))
+        self.joint_names = self._limb.joint_names()
+        q0 = self.ikl.ik_lookup(p0, self.joint_names)
+        cmd = dict(zip(self.joint_names, q0))
         self._limb.move_to_joint_positions(cmd)
         rospy.loginfo("Arms all in place, ready to start controller")
+
+
+    def set_point(self, point):
+        cmd = dict(zip(self.joint_names, point.positions))
+        self._limb.set_joint_positions(cmd, raw=True)
+        self._pub_ff_cmd.publish(point)
+
+    def stop_motion(self, time):
+        point = JointTrajectoryPoint()
+        point.time_from_start = rospy.Duration.from_sec(time)
+        point.positions = self._get_current_position(self.joint_names)
+        point.velocities = [0.0] * len(self.joint_names)
+        point.accelerations = [0.0] * len(self.joint_names)
+        self._limb.set_joint_positions(self._limb.joint_angles(), raw=True)
+        self._pub_ff_cmd.publish(point)
+
+    def start(self):
+
+        # get robot in initial start state
+        self.reset()
 
         # register start time
         self.start_time = rospy.Time.now()
         self.end_time = 10.0
 
-
         # execute trajectory
         while ((rospy.Time.now() - self.start_time).to_sec() < self.end_time):
-            point = self.get_point((rospy.Time.now() - self.start_time).to_sec())
 
-            cmd = dict(zip(joint_names, point.positions))
-            self._limb.set_joint_positions(cmd, raw=True)
-            self._pub_ff_cmd.publish(point)
+            time = (rospy.Time.now() - self.start_time).to_sec()
 
+            #using sine function for test
+            refpose = self.sine_func(time)
+
+            point = self.get_point(refpose)
+            point.time_from_start = rospy.Duration.from_sec(time)
+            self.set_point(point)
             rospy.sleep(1.0 / self._control_rate)
 
         # stop at final trajectory point
-        point.time_from_start = rospy.Time.now() - self.start_time
-        point.positions = self._get_current_position(joint_names)
-        point.velocities = [0.0] * len(joint_names)
-        point.accelerations = [0.0] * len(joint_names)
-        self._limb.set_joint_positions(self._limb.joint_angles(), raw=True)
-        self._pub_ff_cmd.publish(point)
+        self.stop_motion(time)
 
         return 0
 

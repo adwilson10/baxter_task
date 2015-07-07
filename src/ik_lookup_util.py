@@ -42,7 +42,7 @@ class IKLookupUtil( object ):
 
     def ik_lookup(self, refpose, joint_name_order):
         # first let's get the y value:
-        yval = refpose.pose.position.y
+        yval = refpose.positions[0]
         # now find closest key:
         kfloat = find_nearest(self.kvals, yval)
         key = str(kfloat)
@@ -66,7 +66,7 @@ class IKLookupUtil( object ):
 
     def jacob_lookup(self, refpose):
         # first let's get the y value:
-        yval = refpose.pose.position.y
+        yval = refpose.positions[0]
         # now find closest key:
         jfloat = find_nearest(self.jvals, yval)
         key = str(jfloat)
