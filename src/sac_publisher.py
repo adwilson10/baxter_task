@@ -11,29 +11,32 @@ from baxter_interface import CHECK_VERSION
 
 
 class ReferencePublisher( object ):
-    def  __init__(self):
-        rospy.loginfo("Creating ReferencePublisher class")
+    def  __init__(self, init_ros=True):
 
         # set params:
         self.freq = 100.0
         self.dt = 1/float(self.freq)
         self.ell = 0.5
 
-        # kbhit instance
-        self.kb = kbhit.KBHit()
-        rospy.on_shutdown(self.kb.set_normal_term)
-       
-        # Initialize flags
-        self.ready = False
-        self.sac_running = False
+        if init_ros is True:
+            rospy.loginfo("Creating ReferencePublisher class")
 
-        self.baxter_pub = TrajectoryPublisher()
-        self.refpose = JointTrajectoryPoint()
-        self.point = JointTrajectoryPoint()
+            # kbhit instance
+            self.kb = kbhit.KBHit()
+            rospy.on_shutdown(self.kb.set_normal_term)
+           
+            # Initialize flags
+            self.ready = False
+            self.sac_running = False
 
-        self.pub_timer = rospy.Timer(rospy.Duration(self.dt), self.pubtimercb)
-        self.base_time = rospy.Time.now()
-        self.kb_timer = rospy.Timer(rospy.Duration(0.1), self.keycb)
+            self.baxter_pub = TrajectoryPublisher()
+            self.refpose = JointTrajectoryPoint()
+            self.point = JointTrajectoryPoint()
+            self.prevx = -0.25
+
+            self.pub_timer = rospy.Timer(rospy.Duration(self.dt), self.pubtimercb)
+            self.base_time = rospy.Time.now()
+            self.kb_timer = rospy.Timer(rospy.Duration(0.1), self.keycb)
 
         return
 
@@ -49,12 +52,13 @@ class ReferencePublisher( object ):
 #                    self.sacsys.x = new_traj[-1]
 #                    print "ell changed"
             try:
-                print self.sacsys.time
-                self.sacsys.step()
 
                 self.refpose.positions = [self.sacsys.x[0]-0.25]
-                self.refpose.velocities = [self.sacsys.x[4]]
-                self.refpose.accelerations = [0.0] # UPDATE
+                self.refpose.velocities = [self.sacsys.x[1]]
+                self.sacsys.step()
+
+                self.refpose.accelerations = [(self.prevx-2*self.refpose.positions[0]+(self.sacsys.x[0]-0.25))/pow(self.dt,2)]
+                self.prevx = self.refpose.positions[0]
 
                 self.point = self.baxter_pub.get_point(self.refpose)
                 self.point.time_from_start = rospy.Duration.from_sec(self.sacsys.time)
@@ -77,19 +81,19 @@ class ReferencePublisher( object ):
     def sac_init(self):
         # setup sac system
         self.sacsys = sacpy.Sac()
-        self.sacsys.T = 0.5
+        self.sacsys.T = 0.75
         self.sacsys.lam = -10
         self.sacsys.maxdt = 0.2
         self.sacsys.ts = self.dt
-        self.sacsys.usat = [[3,-3]]
+        self.sacsys.usat = [[5,-5]]
         self.sacsys.calc_tm = 0
         self.sacsys.u2search = False
-        self.sacsys.Q = np.diag([0,0,0,0,1,0,0,0])
-        self.sacsys.P = np.diag([10,0,0,0,0,0,0,0])
+        self.sacsys.Q = np.diag([0.1,0,0,0,1,0,0,0])
+        self.sacsys.P = np.diag([1,0,0,0,0,0,0,0])
         self.sacsys.R = np.diag([0.1])
         #self.sacsys.set_xdes_func(xdes_func)
         self.sacsys.x = [0,0,0.01,0,0,0,0,0]
-        self.sacsys.l = self.ell
+        self.sacsys.l = 0.35#self.ell
 
 
     def keycb(self, tdat):

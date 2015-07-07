@@ -70,7 +70,7 @@ class TrajectoryPublisher(object):
         # move right arm to initial config:
         rospy.loginfo("Moving right arm to initial condition")
         p0 = JointTrajectoryPoint()
-        p0.positions = [-0.0]
+        p0.positions = [-0.25]
 
         self.joint_names = self._limb.joint_names()
         q0 = self.ikl.ik_lookup(p0, self.joint_names)
