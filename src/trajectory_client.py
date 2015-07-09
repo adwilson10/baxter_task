@@ -48,19 +48,21 @@ class TrajectoryPublisher(object):
         
         # set velocity from inverse jacobian
         jref = self.ikl.jacob_lookup(refpose)
-        point.velocities = np.dot(jref, np.array([0,refpose.velocities[0],0,0,0,0]))
+        vel = np.dot(jref, np.array([[0],[refpose.velocities[0]],[0],[0],[0],[0]]))
+        point.velocities=((vel.flatten()).tolist())[0]
 
         # set acceleration from inverse jacobian
-        point.accelerations = np.dot(jref, np.array([0,refpose.accelerations[0],0,0,0,0]))
+        acc = np.dot(jref, np.array([[0],[refpose.accelerations[0]],[0],[0],[0],[0]]))
+        point.accelerations=((acc.flatten()).tolist())[0]
 
         return point
 
 
     def sine_func(self, time):
         refpose = JointTrajectoryPoint()
-        refpose.positions = [0.25*math.cos(time)-0.25]
-        refpose.velocities = [-0.25*math.sin(time)]
-        refpose.accelerations = [-0.25*math.cos(time)]
+        refpose.positions = [0.25*math.sin(time)-0.25]
+        refpose.velocities = [0.25*math.cos(time)]
+        refpose.accelerations = [-0.25*math.sin(time)]
         
         return refpose
 
@@ -84,6 +86,7 @@ class TrajectoryPublisher(object):
         self._limb.set_joint_positions(cmd, raw=True)
         self._pub_ff_cmd.publish(point)
 
+	
     def stop_motion(self, time):
         point = JointTrajectoryPoint()
         point.time_from_start = rospy.Duration.from_sec(time)
@@ -100,7 +103,7 @@ class TrajectoryPublisher(object):
 
         # register start time
         self.start_time = rospy.Time.now()
-        self.end_time = 10.0
+        self.end_time = 30.0
 
         # execute trajectory
         while ((rospy.Time.now() - self.start_time).to_sec() < self.end_time):
