@@ -4,6 +4,7 @@ import sacpy
 import numpy as np
 from trajectory_msgs.msg import JointTrajectoryPoint
 from trajectory_client import TrajectoryPublisher
+from geometry_msgs.msg import PointStamped
 import kbhit
 
 import baxter_interface
@@ -24,6 +25,16 @@ class ReferencePublisher( object ):
             # kbhit instance
             self.kb = kbhit.KBHit()
             rospy.on_shutdown(self.kb.set_normal_term)
+
+            # Set desired position publisher
+            self._pub_desired = rospy.Publisher(
+                '/desired_endpoint',
+                PointStamped,
+                queue_size=1)
+
+            self.desired_pt = PointStamped()
+            self.desired_pt.point.x = 0.8
+            self.desired_pt.point.z = 0.0
            
             # Initialize flags
             self.ready = False
@@ -63,6 +74,11 @@ class ReferencePublisher( object ):
                 self.point = self.baxter_pub.get_point(self.refpose)
                 self.point.time_from_start = rospy.Duration.from_sec(self.sacsys.time)
                 self.baxter_pub.set_point(self.point)
+
+                # publish desired point
+                self.desired_pt.header.stamp = rospy.Time.now() 
+                self.desired_pt.point.y = self.refpose.positions[0]
+                self._pub_desired.publish(self.desired_pt)
 
                 if self.sacsys.time >= 8.0: #Note: this is limit is hardcoded in sacpy
                     self.sac_running = False
@@ -107,13 +123,13 @@ class ReferencePublisher( object ):
                 print c
             if c == 'e':
                 if self.sac_running is False:
+                    if self.ready is True:
+                        rospy.loginfo("You pressed 'e', robot is already ready!")
                     if self.ready is False:
                         rospy.loginfo("You pressed 'e', getting robot ready...")
                         self.ready = True
                         self.sac_init()
                         self.baxter_pub.reset()
-                    if self.ready is True:
-                        rospy.loginfo("You pressed 'e', robot is already ready!")
                 else:
                     rospy.loginfo("You pressed 'e' but Sac is running!")
             if c == 's':
