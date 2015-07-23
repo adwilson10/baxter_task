@@ -18,6 +18,7 @@ class ReferencePublisher( object ):
         self.freq = 100.0
         self.dt = 1/float(self.freq)
         self.ell = 0.5
+        self.stabilize_flag = False
 
         if init_ros is True:
             rospy.loginfo("Creating ReferencePublisher class")
@@ -55,7 +56,7 @@ class ReferencePublisher( object ):
     def pubtimercb(self, tdat):
         if self.sac_running:
             try:
-                if stabilize_flag is False:
+                if self.stabilize_flag is False:
                     self.refpose.positions = [self.sacsys.x[0]-0.25]
                     self.refpose.velocities = [self.sacsys.x[1]]
                     self.sacsys.step()
@@ -72,9 +73,6 @@ class ReferencePublisher( object ):
                     self.desired_pt.point.y = self.refpose.positions[0]
                     self._pub_desired.publish(self.desired_pt)
 
-                    system.q = [sacpub.sacsys.x[0],sacpub.sacsys.x[2]]
-                    system.dq = [sacpub.sacsys.x[1],sacpub.sacsys.x[3]]
-
                 else:
                     self.refpose.positions = [self.system.q[0]-0.25]
                     self.refpose.velocities = [self.system.dq[0]]
@@ -84,7 +82,7 @@ class ReferencePublisher( object ):
                     self.prevx = self.refpose.positions[0]
 
                     self.point = self.baxter_pub.get_point(self.refpose)
-                    self.point.time_from_start = rospy.Duration.from_sec(self.trepsys.time)+8.0
+                    self.point.time_from_start = rospy.Duration.from_sec(self.trepsys.time+6.0)
                     self.baxter_pub.set_point(self.point)
 
                     # publish desired point
@@ -92,14 +90,20 @@ class ReferencePublisher( object ):
                     self.desired_pt.point.y = self.refpose.positions[0]
                     self._pub_desired.publish(self.desired_pt)
 
+                if self.stabilize_flag is False:
+                    if self.sacsys.time >= 6.0: #Note: this is limit is hardcoded in sacpy
+                        self.stabilize_flag = True
 
-                if self.time >= 8.0: #Note: this is limit is hardcoded in sacpy
-                    if stabilize_flag is False:
-                        stabilize_flag = True
+                        self.system.q = [self.sacsys.x[0],self.sacsys.x[2]]
+                        self.system.dq = [self.sacsys.x[1],self.sacsys.x[3]]
+                        self.trepsys.init()
+
                         rospy.loginfo("Stabilizing Trajectory...")
-                    else:
+                else:
+                    if self.trepsys.time >= 8.0: #Note: this is limit is hardcoded in sacpy
                         self.sac_running = False
                         self.ready = False
+                        self.stabilize_flag = False
 
                         # stop at final trajectory point
                         self.baxter_pub.stop_motion(self.sacsys.time)
@@ -176,6 +180,7 @@ class ReferencePublisher( object ):
                         rospy.loginfo("You pressed 'e', getting robot ready...")
                         self.ready = True
                         self.sac_init()
+                        self.trep_init()
                         self.baxter_pub.reset()
                 else:
                     rospy.loginfo("You pressed 'e' but Sac is running!")

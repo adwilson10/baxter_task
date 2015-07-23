@@ -80,7 +80,7 @@ class ReferencePublisher( object ):
                 self.desired_pt.point.y = self.refpose.positions[0]
                 self._pub_desired.publish(self.desired_pt)
 
-                if self.sacsys.time >= 8.0: #Note: this is limit is hardcoded in sacpy
+                if self.sacsys.time >= 4.0: #Note: this is limit is hardcoded in sacpy
                     self.sac_running = False
                     self.ready = False
 
@@ -116,7 +116,7 @@ class ReferencePublisher( object ):
         self.sacsys.lam = -10
         self.sacsys.maxdt = 0.2
         self.sacsys.ts = self.dt
-        self.sacsys.usat = [[5, -5]]
+        self.sacsys.usat = [[1, -1]]
         self.sacsys.calc_tm = 0.0
         self.sacsys.u2search = True
         self.sacsys.Q = np.diag([400,100,50,0]) # x,th,xd,thd
