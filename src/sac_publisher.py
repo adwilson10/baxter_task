@@ -97,11 +97,11 @@ class ReferencePublisher( object ):
     def sac_init(self):
         # setup sac system
         self.sacsys = sacpy.Sac()
-        self.sacsys.T = 0.75
+        self.sacsys.T = 0.8
         self.sacsys.lam = -10
         self.sacsys.maxdt = 0.2
         self.sacsys.ts = self.dt
-        self.sacsys.usat = [[5,-5]]
+        self.sacsys.usat = [[4.5,-4.5]]
         self.sacsys.calc_tm = 0
         self.sacsys.u2search = False
         self.sacsys.Q = np.diag([0.1,0,0,0,1,0,0,0])
@@ -109,7 +109,7 @@ class ReferencePublisher( object ):
         self.sacsys.R = np.diag([0.1])
         #self.sacsys.set_xdes_func(xdes_func)
         self.sacsys.x = [0,0,0.01,0,0,0,0,0]
-        self.sacsys.l = 0.35#self.ell
+        self.sacsys.l = 0.5#self.ell
 
 
     def keycb(self, tdat):
