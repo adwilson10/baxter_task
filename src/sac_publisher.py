@@ -9,6 +9,7 @@ import kbhit
 
 import baxter_interface
 from baxter_interface import CHECK_VERSION
+from baxter_test.srv import IsRunning
 
 
 class ReferencePublisher( object ):
@@ -38,6 +39,9 @@ class ReferencePublisher( object ):
            
             # Initialize flags
             self.ready = False
+
+            # setup is_running service
+            rospy.Service('is_running', IsRunning, self.handle_is_running)
             self.sac_running = False
 
             self.baxter_pub = TrajectoryPublisher()
@@ -110,6 +114,10 @@ class ReferencePublisher( object ):
         #self.sacsys.set_xdes_func(xdes_func)
         self.sacsys.x = [0,0,0.01,0,0,0,0,0]
         self.sacsys.l = 0.5#self.ell
+
+
+    def handle_is_running(self, req):
+        return self.sac_running
 
 
     def keycb(self, tdat):

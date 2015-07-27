@@ -60,29 +60,48 @@ class ReferencePublisher( object ):
         if self.trep_running:
             try:
 
-                self.refpose.positions = [self.X[self.i,0]-0.25]
-                self.refpose.velocities = [(self.X[self.i+1,0]-self.X[self.i-1,0])/(2*self.dt)]
-                self.refpose.accelerations = [(self.X[self.i-1,0]-2*self.X[self.i,0]+self.X[self.i+1,0])/pow(self.dt,2)]
+                if self.i > 3.97/self.dt: #Note: this is limit is hardcoded in sacpy
 
-                self.point = self.baxter_pub.get_point(self.refpose)
-                self.point.time_from_start = rospy.Duration.from_sec(self.i*self.dt)
-                self.baxter_pub.set_point(self.point)
+                    self.refpose.positions = [0.2-0.25]
+                    self.refpose.velocities = [0.5]
+                    self.refpose.accelerations = [0.1]
 
-                # publish desired point
-                self.desired_pt.header.stamp = rospy.Time.now() 
-                self.desired_pt.point.y = self.refpose.positions[0]
-                self._pub_desired.publish(self.desired_pt)
+                    self.point = self.baxter_pub.get_point(self.refpose)
+                    self.point.time_from_start = rospy.Duration.from_sec(self.i*self.dt)
+                    self.baxter_pub.set_point(self.point)
 
-                self.i = self.i + 1
+                    # publish desired point
+                    self.desired_pt.header.stamp = rospy.Time.now() 
+                    self.desired_pt.point.y = self.refpose.positions[0]
+                    self._pub_desired.publish(self.desired_pt)
 
-                if self.i > 1.98/self.dt: #Note: this is limit is hardcoded in sacpy
-                    self.trep_running = False
-                    self.ready = False
-                    self.i = 1
+                    self.i = self.i + 1
 
-                    # stop at final trajectory point
-                    self.baxter_pub.stop_motion(2.0)
-                    rospy.loginfo("Trajectory Complete!")
+                    if self.i > 4.98/self.dt: #Note: this is limit is hardcoded in sacpy
+                        self.trep_running = False
+                        self.ready = False
+                        self.i = 1
+
+                        # stop at final trajectory point
+                        self.baxter_pub.stop_motion(4.0)
+                        rospy.loginfo("Trajectory Complete!")
+
+                else:
+
+                    self.refpose.positions = [self.X[self.i,0]-0.25]
+                    self.refpose.velocities = [(self.X[self.i+1,0]-self.X[self.i-1,0])/(2*self.dt)]
+                    self.refpose.accelerations = [(self.X[self.i-1,0]-2*self.X[self.i,0]+self.X[self.i+1,0])/pow(self.dt,2)]
+
+                    self.point = self.baxter_pub.get_point(self.refpose)
+                    self.point.time_from_start = rospy.Duration.from_sec(self.i*self.dt)
+                    self.baxter_pub.set_point(self.point)
+
+                    # publish desired point
+                    self.desired_pt.header.stamp = rospy.Time.now() 
+                    self.desired_pt.point.y = self.refpose.positions[0]
+                    self._pub_desired.publish(self.desired_pt)
+
+                    self.i = self.i + 1
 
             except:
                 rospy.logerr("Trep Failed!")             
@@ -92,21 +111,23 @@ class ReferencePublisher( object ):
 
     def generate_desired_trajectory(self, system, t):
         qd = np.zeros((len(t), system.nQ))
+        pd = np.zeros((len(t), system.nQ))
         cart_index = system.get_config('Cart-x').index
         massx_index = system.get_config('Mass-x').index
         massy_index = system.get_config('Mass-y').index
         for i,t in enumerate(t):
             #qd[i, cart_index] = 0
-            qd[i, massx_index] = self.pendulum_length*sin(pi/4)
-            qd[i, massy_index] = -self.pendulum_length*cos(pi/4)
-        return qd
+            qd[i, massx_index] = self.pendulum_length*sin(pi/3)+0.1
+            qd[i, massy_index] = -self.pendulum_length*cos(pi/3)
+            pd[i, massx_index] = 0.2
+        return qd, pd
 
 
     def trep_init(self):
 
         cart_mass = 0.1
         pendulum_mass = 0.03
-        self.pendulum_length= 0.3
+        self.pendulum_length= 0.368
         g = 9.81;
 
         # define initial config and velocity
@@ -130,7 +151,7 @@ class ReferencePublisher( object ):
         trep.forces.ConfigForce(self.system, "Cart-x", "cart_force")
 
         mvi = trep.MidpointVI(self.system)
-        t = np.arange(0.0, 2.0, self.dt)
+        t = np.arange(0.0, 4.0, self.dt)
         dsys = trep.discopt.DSystem(mvi, t)
 
         # Generate an initial trajectory
@@ -144,15 +165,15 @@ class ReferencePublisher( object ):
             X[k+1] = dsys.f()
 
         # Generate cost function
-        qd = self.generate_desired_trajectory(self.system, t)
-        (Xd, Ud) = dsys.build_trajectory(qd)
+        qd, pd = self.generate_desired_trajectory(self.system, t)
+        (Xd, Ud) = dsys.build_trajectory(qd, pd)
 
-        Qcost = np.zeros((len(t), dsys.nX, dsys.nX))
-        for k in range(dsys.kf()):
-            Qcost[k] = np.diag([0.1, 0, 0, 0, 0, 0, 0, 0])
+        #Qcost = np.zeros((len(t), dsys.nX, dsys.nX))
+        #for k in range(dsys.kf()):
+        Qcost = np.diag([0.0, 0, 0, 0, 0, 0, 0, 0])
 
-        Pcost = np.diag([10, 0, 100, 1000, 0, 0, 1, 1])
-        Rcost = np.diag([0.1])
+        Pcost = np.diag([10, 0, 100, 1000, 0, 0, 100, 1])
+        Rcost = np.diag([0.3])
         cost = trep.discopt.DCost(Xd, Ud, Qcost, Rcost, Qf=Pcost)
 
         optimizer = trep.discopt.DOptimizer(dsys, cost)

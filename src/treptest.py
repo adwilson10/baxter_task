@@ -52,7 +52,7 @@ dt = 0.01
 
 cart_mass = 0.1
 pendulum_mass = 0.03
-pendulum_length= 0.3
+pendulum_length= 0.368
 g = 9.81;
 
 # define initial config and velocity
@@ -61,14 +61,16 @@ x0 = np.array([0, 0, 0, -pendulum_length, 0, 0, 0, 0]) # q = [x_cart, pend_angle
 #rospy.init_node('Cart_Pend_Simulator')
 def generate_desired_trajectory(system, t):
     qd = np.zeros((len(t), system.nQ))
+    pd = np.zeros((len(t), system.nQ))
     cart_index = system.get_config('Cart-x').index
     massx_index = system.get_config('Mass-x').index
     massy_index = system.get_config('Mass-y').index
     for i,t in enumerate(t):
         #qd[i, cart_index] = 0
-        qd[i, massx_index] = pendulum_length*sin(pi/4)
-        qd[i, massy_index] = -pendulum_length*cos(pi/4)
-    return qd
+        qd[i, massx_index] = pendulum_length*sin(pi/2.5)+0.1
+        qd[i, massy_index] = -pendulum_length*cos(pi/2.5)
+        pd[i, massx_index] = 0.2
+    return qd, pd
 
 
 # create system
@@ -92,7 +94,7 @@ trep.forces.ConfigForce(system, "Cart-x", "cart_force")
 
 
 mvi = trep.MidpointVI(system)
-t = np.arange(0.0, 2.0, dt)
+t = np.arange(0.0, 4.0, dt)
 dsys = trep.discopt.DSystem(mvi, t)
 
 
@@ -107,18 +109,18 @@ for k in range(dsys.kf()):
     X[k+1] = dsys.f()
 
 # Generate cost function
-qd = generate_desired_trajectory(system, t)
-(Xd, Ud) = dsys.build_trajectory(qd)
+qd, pd = generate_desired_trajectory(system, t)
+(Xd, Ud) = dsys.build_trajectory(qd, pd)
 
-Qcost = np.zeros((len(t), dsys.nX, dsys.nX))
-for k in range(dsys.kf()):
+#Qcost = np.zeros((len(t), dsys.nX, dsys.nX))
+#for k in range(dsys.kf()):
 #    if k<80:
 #        Qcost[k] = np.diag([0.0, 0, 0, 0, 0, 0, 0, 0])
 #    else:
-    Qcost[k] = np.diag([0.01, 0, 0, 0, 0, 0, 0, 0])
+Qcost = np.diag([0.01, 0, 0, 0, 0, 0, 0, 0])
 
-Pcost = np.diag([10, 0, 100, 1000, 0, 0, 1, 1])
-Rcost = np.diag([0.1])
+Pcost = np.diag([10, 0, 100, 1000, 0, 0, 200, 1])
+Rcost = np.diag([0.4])
 cost = trep.discopt.DCost(Xd, Ud, Qcost, Rcost, Qf=Pcost)
 
 optimizer = trep.discopt.DOptimizer(dsys, cost)

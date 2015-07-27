@@ -7,6 +7,7 @@ project(baxter_test)
 find_package(catkin REQUIRED COMPONENTS
   control_msgs
   trajectory_msgs
+  message_generation
 )
 
 ## System dependencies are found with CMake's conventions
@@ -43,18 +44,19 @@ find_package(catkin REQUIRED COMPONENTS
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-#   Message1.msg
-#   Message2.msg
-# )
+add_message_files(
+  DIRECTORY msg
+  FILES
+  Load.msg
+)
 
 ## Generate services in the 'srv' folder
-# add_service_files(
-#   FILES
-#   Service1.srv
-#   Service2.srv
-# )
+add_service_files(
+  DIRECTORY srv
+  FILES
+  IsRunning.srv
+  Ell.srv
+)
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -64,10 +66,7 @@ find_package(catkin REQUIRED COMPONENTS
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   control_msgs#   trajectory_msgs
-# )
+generate_messages(DEPENDENCIES std_msgs)
 
 ###################################
 ## catkin specific configuration ##
@@ -81,7 +80,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES baxter_test
-#  CATKIN_DEPENDS control_msgs trajectory_msgs
+  CATKIN_DEPENDS message_runtime std_msgs
 #  DEPENDS system_lib
 )
 
