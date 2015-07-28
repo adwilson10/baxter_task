@@ -21,7 +21,6 @@ class ReferencePublisher( object ):
         # set params:
         self.freq = 100.0
         self.dt = 1/float(self.freq)
-        self.ell = 0.5
 
         if init_ros is True:
             rospy.loginfo("Creating ReferencePublisher class")
@@ -62,7 +61,7 @@ class ReferencePublisher( object ):
 
                 if self.i > 3.97/self.dt: #Note: this is limit is hardcoded in sacpy
 
-                    self.refpose.positions = [0.2-0.25]
+                    self.refpose.positions = [0.3-0.25]
                     self.refpose.velocities = [0.5]
                     self.refpose.accelerations = [0.1]
 

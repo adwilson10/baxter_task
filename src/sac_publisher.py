@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 import rospy
 import sacpy
+import trep
+import sactrep
 import numpy as np
 from trajectory_msgs.msg import JointTrajectoryPoint
 from trajectory_client import TrajectoryPublisher
@@ -9,7 +11,7 @@ import kbhit
 
 import baxter_interface
 from baxter_interface import CHECK_VERSION
-from baxter_test.srv import IsRunning
+from baxter_test.srv import IsRunning, Ell
 
 
 class ReferencePublisher( object ):
@@ -18,7 +20,7 @@ class ReferencePublisher( object ):
         # set params:
         self.freq = 100.0
         self.dt = 1/float(self.freq)
-        self.ell = 0.5
+        self.stabilize_flag = False
 
         if init_ros is True:
             rospy.loginfo("Creating ReferencePublisher class")
@@ -43,6 +45,11 @@ class ReferencePublisher( object ):
             # setup is_running service
             rospy.Service('is_running', IsRunning, self.handle_is_running)
             self.sac_running = False
+            self.trep_running = False
+
+            rospy.wait_for_service('ell_est')
+            self.get_ell = rospy.ServiceProxy('ell_est', Ell)
+            self.ell = self.get_ell().value
 
             self.baxter_pub = TrajectoryPublisher()
             self.refpose = JointTrajectoryPoint()
@@ -57,17 +64,16 @@ class ReferencePublisher( object ):
 
 
     def pubtimercb(self, tdat):
-        if self.sac_running:
-            #new_ell = self.get_ell().value
-#                new_ell = 0.5
-#                if (abs(self.ell-new_ell) > 0.001):
-#                    self.ell = new_ell
-#                    self.sacsys.l = self.ell
-#                    new_traj=self.sacsys.simulate(self.ell)
-#                    self.sacsys.x = new_traj[-1]
-#                    print "ell changed"
-            try:
+        new_ell = self.get_ell().value
+        if (abs(self.ell-new_ell) > 0.001):
+            self.ell = new_ell
+            self.sacsys.l = self.ell
+            new_traj=self.sacsys.simulate(self.ell)
+            self.sacsys.x = new_traj[-1]
+            print "ell changed: ", self.ell
+        try:
 
+            if self.sac_running is True:
                 self.refpose.positions = [self.sacsys.x[0]-0.25]
                 self.refpose.velocities = [self.sacsys.x[1]]
                 self.sacsys.step()
@@ -86,14 +92,41 @@ class ReferencePublisher( object ):
 
                 if self.sacsys.time >= 8.0: #Note: this is limit is hardcoded in sacpy
                     self.sac_running = False
+                    self.trep_running = True
+                    self.trep_init()
+
+                    self.system.q = [self.sacsys.x[0],self.sacsys.x[2]]
+                    self.system.dq = [self.sacsys.x[1],self.sacsys.x[3]]
+                    self.trepsys.init()
+                    rospy.loginfo("Stabilizing Trajectory...")
+
+            elif self.trep_running is True:
+                self.refpose.positions = [self.system.q[0]-0.25]
+                self.refpose.velocities = [self.system.dq[0]]
+                self.trepsys.step()
+
+                self.refpose.accelerations = [(self.prevx-2*self.refpose.positions[0]+(self.system.q[0]-0.25))/pow(self.dt,2)]
+                self.prevx = self.refpose.positions[0]
+
+                self.point = self.baxter_pub.get_point(self.refpose)
+                self.point.time_from_start = rospy.Duration.from_sec(self.trepsys.time+6.0)
+                self.baxter_pub.set_point(self.point)
+
+                # publish desired point
+                self.desired_pt.header.stamp = rospy.Time.now() 
+                self.desired_pt.point.y = self.refpose.positions[0]
+                self._pub_desired.publish(self.desired_pt)
+
+                if self.trepsys.time >= 6.0: #Note: this is limit is hardcoded in sacpy
+                    self.trep_running = False
                     self.ready = False
 
                     # stop at final trajectory point
                     self.baxter_pub.stop_motion(self.sacsys.time)
                     rospy.loginfo("Trajectory Complete!")
 
-            except:
-                rospy.logerr("SAC Failed!")             
+        except:
+            rospy.logerr("SAC Failed!")             
 
         return
 
@@ -101,19 +134,47 @@ class ReferencePublisher( object ):
     def sac_init(self):
         # setup sac system
         self.sacsys = sacpy.Sac()
-        self.sacsys.T = 0.8
-        self.sacsys.lam = -10
+        self.sacsys.T = 0.4
+        self.sacsys.lam = -5
         self.sacsys.maxdt = 0.2
         self.sacsys.ts = self.dt
-        self.sacsys.usat = [[4.5,-4.5]]
+        self.sacsys.usat = [[3,-3]]
         self.sacsys.calc_tm = 0
         self.sacsys.u2search = False
-        self.sacsys.Q = np.diag([0.1,0,0,0,1,0,0,0])
-        self.sacsys.P = np.diag([1,0,0,0,0,0,0,0])
-        self.sacsys.R = np.diag([0.1])
+        self.sacsys.Q = np.diag([1,0,0,0,1,0,0,0])
+        self.sacsys.P = np.diag([20,0,0,0,0,0,0,0])
+        self.sacsys.R = np.diag([1.2])
         #self.sacsys.set_xdes_func(xdes_func)
         self.sacsys.x = [0,0,0.01,0,0,0,0,0]
-        self.sacsys.l = 0.5#self.ell
+        self.sacsys.l = self.ell
+
+    def trep_init(self):
+        # create system
+        self.system = trep.System()
+        # define frames
+        frames = [
+            trep.tx("x_cart", name="CartFrame", mass=0.1), [
+                trep.rz("theta", name="PendulumBase"), [
+                    trep.ty(-self.ell, name="Pendulum", mass=0.03)]]]
+        # add frames to system
+        self.system.import_frames(frames)
+        # add gravity potential
+        trep.potentials.Gravity(self.system, (0,-9.81,0))
+        # add a horizontal force on the cart
+        trep.forces.ConfigForce(self.system, "x_cart", "cart_force")
+        trep.forces.Damping(self.system,0.0,  {'theta':0.001})
+
+        self.trepsys = sactrep.Sac(self.system)
+        self.trepsys.T = 0.8
+        self.trepsys.lam = -10
+        self.trepsys.maxdt = 0.2
+        self.trepsys.ts = self.dt
+        self.trepsys.usat = [[1, -1]]
+        self.trepsys.calc_tm = 0.0
+        self.trepsys.u2search = True
+        self.trepsys.Q = np.diag([50,50,50,0]) # x,th,xd,thd
+        self.trepsys.P = 0*np.diag([0,0,0,0])
+        self.trepsys.R = 0.3*np.identity(1)
 
 
     def handle_is_running(self, req):

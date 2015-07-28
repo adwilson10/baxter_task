@@ -32,7 +32,7 @@ class Estimator( object ):
 
         rospy.wait_for_service('is_running')
         self.run_srv = rospy.ServiceProxy('is_running', IsRunning)
-        self.dt = 0.01
+        self.dt = 0.0125
         self.running = False
         self.index = 0
 
@@ -45,7 +45,7 @@ class Estimator( object ):
         
         self.ell_pub = rospy.Publisher("ell", Load, queue_size=1)
 
-        self.ts = message_filters.ApproximateTimeSynchronizer([self.load_sub, self.state_sub], 12, 0.008)
+        self.ts = message_filters.ApproximateTimeSynchronizer([self.load_sub, self.state_sub], 5, 0.013)
         self.ts.registerCallback(self.estimatecb)
 
         self.ell_msg = Load()
@@ -74,11 +74,11 @@ class Estimator( object ):
             self.load_array[self.index] = load.load 
             self.pose_array[self.index] = state.pose.position.y
             
-            if self.index+1 in [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80]:
+            if self.index+1 in [120,160,200,240,280,320,360,400,440,480,520,560,600,640]:
                 self.estimate_thread = Thread(target=self.run_estimate, args=(self.index, self.load_array, self.pose_array))
                 self.estimate_thread.start()
 
-            if self.index == 80:
+            if self.index == 640:
                 self.running = False
                 self.index = 0
                 rospy.loginfo("Trajectory Complete!")
@@ -102,7 +102,7 @@ class Estimator( object ):
 
         i = 0
         Q = np.array([mvi.q1])
-        while i < (index+1)*10-1:
+        while i < index:
             mvi.step(mvi.t2+self.dt, [], [state[i]])
             Q = np.vstack((Q, mvi.q1))
             i = i+1
@@ -118,7 +118,7 @@ class Estimator( object ):
 
         # compute predicted force from trep simulation
         ypred = np.array([-9.81*self.m])
-        for i in range(10, len(q), 10):
+        for i in range(1, len(q)):
             ypred = np.append(ypred, [self.m*(-9.81*cos(q[i])-self.ell*pow(qdot[i],2))])
 
         # compute least squares parameter error
@@ -136,10 +136,15 @@ class Estimator( object ):
         sum2 = 0.0
 
         for i in range(0, len(ymeas)):
-            Dgp = self.m*(9.81*sin(q[i*10])*dqp[i*10]+(-2.0*self.ell*dqpdot[i*10]-qdot[i*10])*qdot[i*10])
+            Dgp = self.m*(9.81*sin(q[i])*dqp[i]+(-2.0*self.ell*dqpdot[i]-qdot[i])*qdot[i])
             sum1 = sum1 + Dgp*sigma*Dgp
             sum2 = sum2 + Dgp*sigma*(ymeas[i]-ypred[i])
         update = pow(sum1,-1)*sum2
+
+        np.save("q_"+str(index+1), q)
+        np.save("ymeas_"+str(index+1), ymeas)
+        np.save("ypred_"+str(index+1), ypred)
+        np.save("state_"+str(index+1), state)
 
         test_ell = self.ell + update
 
@@ -156,7 +161,7 @@ class Estimator( object ):
 
             i = 0
             Q = np.array([mvi.q1])
-            while i < (index+1)*10-1:
+            while i < index:
                 mvi.step(mvi.t2+self.dt, [], [state[i]])
                 Q = np.vstack((Q, mvi.q1))
                 i = i+1
@@ -169,7 +174,7 @@ class Estimator( object ):
 
             # compute predicted force from trep simulation
             ypred = np.array([-9.81*self.m])
-            for i in range(10, len(q), 10):
+            for i in range(1, len(q)):
                 ypred = np.append(ypred, [self.m*(-9.81*cos(q[i])-test_ell*pow(qdot[i],2))])
 
             # compute least squares parameter error

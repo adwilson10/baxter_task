@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 
 sacpub = ReferencePublisher(init_ros=False)
 
+sacpub.ell = 0.45
 sacpub.sac_init()
 xarray = np.array([sacpub.sacsys.x[0:4]])
 
@@ -28,14 +29,14 @@ trep.forces.Damping(system,0.0,  {'theta':0.001})
 
 trepsys = sactrep.Sac(system)
 
-trepsys.T = 1.2
+trepsys.T = 2.0
 trepsys.lam = -10
 trepsys.maxdt = 0.2
 trepsys.ts = sacpub.dt
-trepsys.usat = [[1, -1]]
+trepsys.usat = [[5, -5]]
 trepsys.calc_tm = 0.0
 trepsys.u2search = True
-trepsys.Q = np.diag([50,50,50,0]) # x,th,xd,thd
+trepsys.Q = np.diag([50,100,0,0]) # x,th,xd,thd
 trepsys.P = 0*np.diag([0,0,0,0])
 trepsys.R = 0.3*np.identity(1)
 
