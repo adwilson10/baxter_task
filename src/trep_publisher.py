@@ -116,8 +116,8 @@ class ReferencePublisher( object ):
         massy_index = system.get_config('Mass-y').index
         for i,t in enumerate(t):
             #qd[i, cart_index] = 0
-            qd[i, massx_index] = self.pendulum_length*sin(pi/3)+0.1
-            qd[i, massy_index] = -self.pendulum_length*cos(pi/3)
+            qd[i, massx_index] = 0.4187#self.pendulum_length*sin(pi/3)+0.1
+            qd[i, massy_index] = -0.184#-self.pendulum_length*cos(pi/3)
             pd[i, massx_index] = 0.2
         return qd, pd
 
@@ -126,7 +126,7 @@ class ReferencePublisher( object ):
 
         cart_mass = 0.1
         pendulum_mass = 0.03
-        self.pendulum_length= 0.368
+        self.pendulum_length= 0.425
         g = 9.81;
 
         # define initial config and velocity
