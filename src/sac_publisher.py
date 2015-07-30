@@ -120,7 +120,7 @@ class ReferencePublisher( object ):
                 self.desired_pt.point.y = self.refpose.positions[0]
                 self._pub_desired.publish(self.desired_pt)
 
-                if self.trepsys.time >= 6.0: #Note: this is limit is hardcoded in sacpy
+                if self.trepsys.time >= 3.0: #Note: this is limit is hardcoded in sacpy
                     self.trep_running = False
                     self.trep_task = True
                     #self.ready = False

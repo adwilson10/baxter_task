@@ -141,10 +141,10 @@ class Estimator( object ):
             sum2 = sum2 + Dgp*sigma*(ymeas[i]-ypred[i])
         update = pow(sum1,-1)*sum2
 
-        np.save("q_"+str(index+1), q)
-        np.save("ymeas_"+str(index+1), ymeas)
-        np.save("ypred_"+str(index+1), ypred)
-        np.save("state_"+str(index+1), state)
+#        np.save("q_"+str(index+1), q)
+#        np.save("ymeas_"+str(index+1), ymeas)
+#        np.save("ypred_"+str(index+1), ypred)
+#        np.save("state_"+str(index+1), state)
 
         test_ell = self.ell + update
 
